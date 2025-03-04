@@ -4,7 +4,7 @@ import requests
 from flask import Flask, request
 import sqlite3
 
-AUDD_KEY = os.environ["AUDD_KEY"]
+AUDD_KEY = ''
 URI = "https://api.audd.io/"
 
 app = Flask(__name__)
@@ -34,14 +34,9 @@ def test_admin_remove():
 @app.route("/user/convert",methods=["POST"])
 def user_convert():
 
-    #parser.parse()
-    #parser = request.make_form_data_parser()
-    #audio = base64.b64encode(request.files["audio"].read())
-    audio = bytes(request.get_json()["audio"], "utf-8")
-    print(audio)
-
-    #print(audio)
-    audio = base64.b64encode(open("_Blinding Lights.wav", 'rb').read())
+    
+    audio = request.get_json()["audio"]
+   
     data = {
         "Content-Type": "multipart/form-data",
         "api_token" : AUDD_KEY,
@@ -49,7 +44,9 @@ def user_convert():
     }
     
     response = requests.post(URI, data=data)
+    
     print(response.json().keys())
+
     if "error" in response.json().keys():
         return response.json()["error"]
     name = response.json()["result"]["title"]
@@ -63,18 +60,26 @@ def user_convert():
 
     return res.fetchone()[1]
 
-def admin_add(name, file):
+@app.route("/admin/add",methods=["POST"])
+def admin_add():
+    name = request.get_json()["name"]
+    file = request.get_json()["audio"]
+    artist = request.get_json()["artist"]
+
     con = sqlite3.connect("songs.db")
     cur = con.cursor()
     # Potentially could do an SQL injection
-    query = "INSERT INTO songs VALUES (?, ?)"
-    cur.execute(query, (name, file))
+    query = "INSERT INTO songs VALUES (?, ?, ?)"
+    cur.execute(query, (name, artist, file))
     cur.close()
     con.commit()
+    return {"name": name, "file": file, "artist":artist}, 201
 
-def admin_remove(name):
+@app.route("/admin/remove",methods=["POST"])
+def admin_remove():
     # Potentially add an id rather than a name so that it can be unique or something idk like in the case where two songs have the same name
     # Perhaps a composite key of the name and artist as it is exceedingly unlikely that an artist created the same song with the exact same title
+    name = request.get_json()["name"]
     con = sqlite3.connect("songs.db")
     cur = con.cursor()
     query = "DELETE FROM songs WHERE name = '"+name+"'"
@@ -82,7 +87,9 @@ def admin_remove(name):
     cur.execute(query)
     cur.close()
     con.commit()
+    return {"name": name}, 200
 
+@app.route("/admin/get",methods=["GET"])
 def admin_list_all():
     # Potentially also add artist names and such, so the admin can have a more full picture.
     con = sqlite3.connect("songs.db")
@@ -91,6 +98,7 @@ def admin_list_all():
     cur.execute(query)
     result = cur.fetchall()
     cur.close()
+    return {"songs": result}, 200
 
 
 if __name__ == "__main__":
