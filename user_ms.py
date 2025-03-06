@@ -4,7 +4,7 @@ import requests
 from flask import Flask, request
 import sqlite3
 
-AUDD_KEY = 'de521fe3b51f153c29a7296c3012816a'
+AUDD_KEY = ''
 URI = "https://api.audd.io/"
 
 app = Flask(__name__)
@@ -16,10 +16,6 @@ app = Flask(__name__)
 @app.route("/user/convert",methods=["POST"])
 def user_convert():
 
-
-
-    
-   
     if not request.get_json() or not request.get_json()["audio"]:
         return {"error": "No audio file provided, or bad syntax"}, 400
 

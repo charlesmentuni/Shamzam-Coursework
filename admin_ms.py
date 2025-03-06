@@ -2,7 +2,7 @@ import sqlite3
 from flask import Flask, request
 
 
-AUDD_KEY = 'de521fe3b51f153c29a7296c3012816a'
+AUDD_KEY = ''
 URI = "https://api.audd.io/"
 
 app = Flask(__name__)
