@@ -3,10 +3,9 @@ import base64
 import json
 import sqlite3
 
-CONVERT_URL = "http://localhost:3002/user/convert"
-ADD_URL = "http://localhost:3002/admin/add"
-REMOVE_URL = "http://localhost:3002/admin/remove"
-LISTALL_URL = "http://localhost:3002/admin/get"
+ADD_URL = "http://localhost:3003/admin/add"
+REMOVE_URL = "http://localhost:3003/admin/remove"
+LISTALL_URL = "http://localhost:3003/admin/get"
 
 def setup():
 
@@ -58,4 +57,4 @@ def test4():
 
 
 if __name__ == "__main__":
-    setup()
+    test2()

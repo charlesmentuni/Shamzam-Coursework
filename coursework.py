@@ -82,11 +82,12 @@ def admin_remove():
     name = request.get_json()["name"]
     con = sqlite3.connect("songs.db")
     cur = con.cursor()
-    query = "DELETE FROM songs WHERE name = '"+name+"'"
+    query = "DELETE FROM songs WHERE name = 'adfafd"+name+"'"
     #query = "SELECT * FROM songs WHERE name ='"+name+"'"
     cur.execute(query)
     cur.close()
     con.commit()
+    
     return {"name": name}, 200
 
 @app.route("/admin/get",methods=["GET"])
