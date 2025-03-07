@@ -46,7 +46,7 @@ class Testing(unittest.TestCase):
         blinding_lights.close()
         hdrs = {"Content-Type" : "application/json"}
         js   =  {"name" : "Blinding Lights", "artist": "The Weeknd", "audio" : full_file}
-        rsp = requests.post(ADD_URL, headers=hdrs, json=js)
+        rsp = requests.put(ADD_URL, headers=hdrs, json=js)
         self.assertEqual(rsp.status_code, 201)
 
 
@@ -64,7 +64,7 @@ class Testing(unittest.TestCase):
 
         hdrs = {"Content-Type" : "application/json"}
         js   =  {"name" : "Wonderwall", "artist": "Oasis", "audio" : full_file}
-        rsp = requests.post(ADD_URL, headers=hdrs, json=js)
+        rsp = requests.put(ADD_URL, headers=hdrs, json=js)
         
         self.assertEqual(rsp.status_code, 201)
 
@@ -80,7 +80,7 @@ class Testing(unittest.TestCase):
         hdrs = {"Content-Type" : "application/json"}
         js   =  {"name" : "Dont Look Back In Anger", "artist": "Oasis", "audio" : full_file}
 
-        rsp = requests.post(ADD_URL, headers=hdrs, json=js)
+        rsp = requests.put(ADD_URL, headers=hdrs, json=js)
 
         self.assertEqual(rsp.status_code, 409)
         self.assertEqual(rsp.json(), {"error" : "Song already exists in table"})
@@ -91,11 +91,10 @@ class Testing(unittest.TestCase):
     ###########################################################
 
     def test4(self):
-        full_file = ""
 
         hdrs = {"Content-Type" : "application/json"}
         js   =  {}
-        rsp = requests.post(ADD_URL, headers=hdrs, json=js)
+        rsp = requests.put(ADD_URL, headers=hdrs, json=js)
 
         self.assertEqual(rsp.status_code, 400)
         self.assertEqual(rsp.json(), {"error": "One or more fields are empty"})

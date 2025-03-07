@@ -31,7 +31,7 @@ class Testing(unittest.TestCase):
         cur.execute(query, ("Everybody (Backstreet's Back) (Radio Edit)", "Backstreet Boys", file))
 
         con.commit()
-        con.close()
+        con.close() 
 
     ###################################################################################################
     ## HAPPY PATH 1: Recognise Blinding Lights from a fragment and return name, artist and full song ##
@@ -46,6 +46,9 @@ class Testing(unittest.TestCase):
         rsp  = requests.post(CONVERT_URL, headers=hdrs, json=js)
 
         self.assertEqual(rsp.status_code, 200)
+        self.assertEqual(rsp.json().get("name"), "Blinding Lights")
+        self.assertEqual(rsp.json().get("artist"), "The Weeknd")
+        self.assertTrue("file" in rsp.json().keys())
     
 
     ############################################################################
@@ -64,6 +67,9 @@ class Testing(unittest.TestCase):
         rsp  = requests.post(CONVERT_URL, headers=hdrs, json=js)
 
         self.assertEqual(rsp.status_code, 200)
+        self.assertEqual(rsp.json().get("name"), "Everybody (Backstreet's Back) (Radio Edit)")
+        self.assertEqual(rsp.json().get("artist"), "Backstreet Boys")
+        self.assertTrue("file" in rsp.json().keys())
 
 
     ###########################################################
@@ -104,7 +110,6 @@ class Testing(unittest.TestCase):
         rsp  = requests.post(CONVERT_URL, headers=hdrs, json=js)
         self.assertEqual(rsp.status_code, 400)
         self.assertEqual(rsp.json(), {"error": "No audio file provided, or bad syntax"})
-
 
 
     def tearDown(self):

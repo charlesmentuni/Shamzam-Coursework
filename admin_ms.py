@@ -13,7 +13,7 @@ app = Flask(__name__)
 # /admin/list
 
 
-@app.route("/admin/add",methods=["POST"])
+@app.route("/admin/add",methods=["PUT"])
 def admin_add():
     # This function adds a song the songs table in the database
 
