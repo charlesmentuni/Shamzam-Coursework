@@ -1,12 +1,11 @@
 import unittest.async_case
 import requests
 import base64
-import json
 import sqlite3
 import unittest
 
 
-LISTALL_URL = "http://localhost:3003/admin/get"
+LISTALL_URL = "http://localhost:3003/admin/list"
 
 class Testing(unittest.TestCase):
     def setUp(self):
@@ -39,13 +38,55 @@ class Testing(unittest.TestCase):
         con.commit()
         con.close()
 
-    #
-    # HAPPY PATH 1: Listing all songs in the table
-    #
+    ############################################################
+    ## HAPPY PATH 1: Listing all songs in the table           ##
+    ############################################################
     def test1(self):
         rsp = requests.get(LISTALL_URL)
-
         self.assertEqual(rsp.status_code, 200)
+
+
+    ############################################################
+    ## HAPPY PATH 2: Listing a limited number of songs        ##
+    ############################################################
+    def test2(self):
+        rsp = requests.get(LISTALL_URL + "?num_of_songs=2")
+        self.assertEqual(rsp.status_code, 200)
+        self.assertEqual(len(rsp.json()["songs"]), 2)
+
+
+    ############################################################
+    ## HAPPY PATH 3: Listing zero songs from the table        ##
+    ############################################################
+    def test3(self):
+        rsp = requests.get(LISTALL_URL + "?num_of_songs=0")
+        self.assertEqual(rsp.status_code, 200)
+        self.assertEqual(len(rsp.json()["songs"]), 0)
+
+    ############################################################
+    ## UNHAPPY PATH 1: Invalid limit value                    ##
+    ############################################################
+    def test4(self):
+        rsp = requests.get(LISTALL_URL + "?num_of_songs=abc")
+        self.assertEqual(rsp.status_code, 400)
+        self.assertEqual(rsp.json(), {"error": "Invalid limit value"})
+    
+
+    ############################################################
+    ## UNHAPPY PATH 2: Invalid limit value (negative number)  ##
+    ############################################################
+    def test5(self):
+        rsp = requests.get(LISTALL_URL + "?num_of_songs=-1")
+        self.assertEqual(rsp.status_code, 400)
+        self.assertEqual(rsp.json(), {"error": "Invalid limit value"})
+
+    def tearDown(self):
+        con = sqlite3.connect("../songs.db")
+        cur = con.cursor()
+        con.execute("DROP TABLE IF EXISTS songs")
+        con.commit()
+        con.close()
+
 
 
 class Testing1(unittest.TestCase):
@@ -57,12 +98,21 @@ class Testing1(unittest.TestCase):
         con.commit()
 
         cur.execute("CREATE TABLE songs (name TEXT, artist TEXT, file TEXT, PRIMARY KEY (name, artist))")
+        con.close()
 
-    #
-    # HAPPY PATH 2: Listing songs when there are no songs in the table
-    #
+
+    #######################################################################
+    ## HAPPY PATH 4: Listing songs when there are no songs in the table. ##
+    #######################################################################
     def test1(self):
         rsp = requests.get(LISTALL_URL)
     
         self.assertEqual(rsp.status_code, 200)
         self.assertEqual(rsp.json(), {"songs":[]})
+
+    def tearDown(self):
+        con = sqlite3.connect("../songs.db")
+        cur = con.cursor()
+        con.execute("DROP TABLE IF EXISTS songs")
+        con.commit()
+        con.close()
