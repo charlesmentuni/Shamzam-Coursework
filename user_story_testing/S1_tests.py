@@ -1,116 +1,119 @@
 import requests
 import base64
+import json
 import sqlite3
 import unittest
 
 
-CONVERT_URL = "http://localhost:3002/user/convert"
+ADD_URL = "http://localhost:3003/admin/add"
 
+# Unhappy paths: adding a file that already exists, Having no content in the file.
+# Happy paths: adding a file that doesn't exist
 
 class Testing(unittest.TestCase):
     def setUp(self):
-
+        
         con = sqlite3.connect("../songs.db")
         cur = con.cursor()
 
+        # Empties the database
         con.execute("DROP TABLE IF EXISTS songs")
         con.commit()
 
+        # Creates new table and fills with Don't look back in anger by Oasis
         cur.execute("CREATE TABLE songs (name TEXT, artist TEXT, file TEXT, PRIMARY KEY (name, artist))")
 
         query = "INSERT INTO songs VALUES (?, ?, ?)"
-
-        with open("../full_songs/Blinding Lights.wav", 'rb') as f:
-            file = base64.b64encode(f.read()).decode('utf-8')
-
-        cur.execute(query, ("Blinding Lights", "The Weeknd", file))
-
-        with open("../full_songs/Everybody (Backstreets Back) (Radio Edit).wav", 'rb') as f:
+        
+        with open("../full_songs/Dont Look Back In Anger.wav", 'rb') as f:
             file = base64.b64encode(f.read()).decode('utf-8')
         
-        cur.execute(query, ("Everybody (Backstreet's Back) (Radio Edit)", "Backstreet Boys", file))
-
+        cur.execute(query, ("Dont Look Back In Anger", "Oasis", file))
         con.commit()
-        con.close() 
 
-    ###################################################################################################
-    ## HAPPY PATH 1: Recognise Blinding Lights from a fragment and return name, artist and full song ##
-    ###################################################################################################
-    def test1(self):
-        with open("../fragments/_Blinding Lights.wav", 'rb') as f:
-            cropped_file = base64.b64encode(f.read()).decode('utf-8')
-
-        hdrs = {"Content-Type" : "application/json"}
-        js   =  {"audio" : cropped_file }
-
-        rsp  = requests.post(CONVERT_URL, headers=hdrs, json=js)
-
-        self.assertEqual(rsp.status_code, 200)
-        self.assertEqual(rsp.json().get("name"), "Blinding Lights")
-        self.assertEqual(rsp.json().get("artist"), "The Weeknd")
-        self.assertTrue("file" in rsp.json().keys())
-    
-
-    ############################################################################
-    ## HAPPY PATH 2: Recognise Everybody (Backstreet's Back) from a fragment. ##
-    ############################################################################
-    def test2(self):
-        # The name returned from AUDD API may not neccessarily be the name listed in the songs table
-        # Also the song name has an apostrophe in it, which may cause issues when selecting
-
-        with open("../fragments/_Everybody (Backstreets Back) (Radio Edit).wav", 'rb') as f:
-            cropped_file = base64.b64encode(f.read()).decode('utf-8')
-        
-        hdrs = {"Content-Type" : "application/json"}
-        js   =  {"audio" : cropped_file }
-
-        rsp  = requests.post(CONVERT_URL, headers=hdrs, json=js)
-
-        self.assertEqual(rsp.status_code, 200)
-        self.assertEqual(rsp.json().get("name"), "Everybody (Backstreet's Back) (Radio Edit)")
-        self.assertEqual(rsp.json().get("artist"), "Backstreet Boys")
-        self.assertTrue("file" in rsp.json().keys())
+        con.close()
 
 
     ###########################################################
-    ## UNHAPPY PATH 1: Fragment not recognised by Audd API   ##
+    ## HAPPY PATH 1: Adding a song that doesn't exist        ##
+    ###########################################################
+
+    def test1(self):
+        
+        # Base64 encodes full song file and converts to string, so that it can be sent through a json file
+        with open("../full_songs/Blinding Lights.wav", 'rb') as f:
+            full_file = base64.b64encode(f.read()).decode('utf-8')
+
+        hdrs = {"Content-Type" : "application/json"}
+        js   =  {"name" : "Blinding Lights", "artist": "The Weeknd", "audio" : full_file}
+        
+        rsp = requests.put(ADD_URL, headers=hdrs, json=js)
+        self.assertEqual(rsp.status_code, 201)
+
+
+    ###########################################################
+    ## HAPPY PATH 2: Adding a new song by the same artist    ##
+    ###########################################################
+
+    def test2(self):
+        # Artist and song name are used as a composite key in the database
+        # This is testing if the database can handle 2 or more songs by the same artist
+
+        # The file is arbitrary, as it doesn't matter what the actual song is
+        with open("../full_songs/Blinding Lights.wav", 'rb') as blinding_lights:
+            full_file = base64.b64encode(blinding_lights.read()).decode('utf-8')
+
+        hdrs = {"Content-Type" : "application/json"}
+        js   =  {"name" : "Wonderwall", "artist": "Oasis", "audio" : full_file}
+        rsp = requests.put(ADD_URL, headers=hdrs, json=js)
+        
+        self.assertEqual(rsp.status_code, 201)
+
+
+    ###########################################################
+    ## UNHAPPY PATH 1: Adding a song that already exists     ##
     ###########################################################
     def test3(self):
-        with open("../fragments/_Davos.wav", 'rb') as f:
-            davos_fragment = base64.b64encode(f.read()).decode('utf-8')
-        
-        hdrs = {"Content-Type" : "application/json"}
-        js   =  {"audio" : davos_fragment }
-        rsp  = requests.post(CONVERT_URL, headers=hdrs, json=js)
+        # Don't look back in Anger was already added in the setup, so can't be added again
+        with open("../full_songs/Dont Look Back In Anger.wav", 'rb') as f:
+            full_file = base64.b64encode(f.read()).decode('utf-8')
 
-        self.assertEqual(rsp.status_code, 404)
-        self.assertEqual(rsp.json(), {"error": "Fragment not recognised"})
-    
-    #################################################################################
-    ## UNHAPPY PATH 2: Fragment recognised by Audd API but not in the songs table. ##
-    ################################################################################
+        hdrs = {"Content-Type" : "application/json"}
+        js   =  {"name" : "Dont Look Back In Anger", "artist": "Oasis", "audio" : full_file}
+
+        rsp = requests.put(ADD_URL, headers=hdrs, json=js)
+
+        self.assertEqual(rsp.status_code, 409)
+        self.assertEqual(rsp.json(), {"error" : "Song already exists in table"})
+
+
+    ###########################################################
+    ## UNHAPPY PATH 2: Adding a song with no content         ##
+    ###########################################################
+
     def test4(self):
-        with open("../fragments/_good 4 u.wav", 'rb') as f:
-            cropped_file = base64.b64encode(f.read()).decode('utf-8')
 
-        hdrs = {"Content-Type" : "application/json"}
-        js   =  {"audio" : cropped_file }
-        rsp  = requests.post(CONVERT_URL, headers=hdrs, json=js)
-
-        self.assertEqual(rsp.status_code, 404)
-        self.assertEqual(rsp.json(), {"error": "Fragment recognised but not in the songs table"})
-
-
-    ###########################################################
-    ## UNHAPPY PATH 3: File is not sent in the request.       ##
-    ###########################################################
-    def test5(self):
         hdrs = {"Content-Type" : "application/json"}
         js   =  {}
-        rsp  = requests.post(CONVERT_URL, headers=hdrs, json=js)
-        self.assertEqual(rsp.status_code, 400)
-        self.assertEqual(rsp.json(), {"error": "No audio file provided, or bad syntax"})
+        rsp = requests.put(ADD_URL, headers=hdrs, json=js)
 
+        self.assertEqual(rsp.status_code, 400)
+        self.assertEqual(rsp.json(), {"error": "One or more fields are empty"})
+
+    ###########################################################
+    ## UNHAPPY PATH 3: Using the wrong method request        ##
+    ###########################################################
+
+    def test5(self):
+        # Test that it will return an error if it isn't a PUT request
+        with open("../full_songs/Blinding Lights.wav", 'rb') as f:
+            full_file = base64.b64encode(f.read()).decode('utf-8')
+
+        hdrs = {"Content-Type" : "application/json"}
+        js   =  {"name" : "Blinding Lights", "artist": "The Weeknd", "audio" : full_file}
+        rsp = requests.post(ADD_URL, headers=hdrs, json=js)
+
+        self.assertEqual(rsp.status_code, 405)
 
     def tearDown(self):
         con = sqlite3.connect("../songs.db")

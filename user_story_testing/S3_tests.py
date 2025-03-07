@@ -1,88 +1,84 @@
+import unittest.async_case
 import requests
 import base64
 import sqlite3
 import unittest
 
 
-REMOVE_URL = "http://localhost:3003/admin/remove"
+LISTALL_URL = "http://localhost:3003/admin/list"
 
 class Testing(unittest.TestCase):
-    
     def setUp(self):
         con = sqlite3.connect("../songs.db")
         cur = con.cursor()
 
         con.execute("DROP TABLE IF EXISTS songs")
         con.commit()
+
         cur.execute("CREATE TABLE songs (name TEXT, artist TEXT, file TEXT, PRIMARY KEY (name, artist))")
 
+        f1 = open("../full_songs/Blinding Lights.wav", 'rb')
+        f2 = open("../full_songs/Everybody (Backstreets Back) (Radio Edit).wav", 'rb')
+        f3 = open("../full_songs/good 4 u.wav", 'rb')
+
         query = "INSERT INTO songs VALUES (?, ?, ?)"
-
-        with open("../full_songs/Blinding Lights.wav", 'rb') as f:
-            file = base64.b64encode(f.read()).decode('utf-8')
-
+        file = base64.b64encode(f1.read()).decode('utf-8')
         cur.execute(query, ("Blinding Lights", "The Weeknd", file))
 
-        with open("../full_songs/Dont Look Back In Anger.wav", 'rb') as f:
-            file = base64.b64encode(f.read()).decode('utf-8')
+        file = base64.b64encode(f2.read()).decode('utf-8')
+        cur.execute(query, ("Everybody (Backstreets Back) (Radio Edit)", "Backstreet Boys", file))
 
-        cur.execute(query, ("Don't Look Back In Anger", "Oasis", file))
+        file = base64.b64encode(f3.read()).decode('utf-8')
+        cur.execute(query, ("good 4 u", "Olivia Rodrigo", file))
+
+        f1.close()
+        f2.close()
+        f3.close()
 
         con.commit()
-
         con.close()
 
-    ###################################################################
-    ## HAPPY PATH 1: Removing a song that exists on the songs table. ##
-    ###################################################################
+    ############################################################
+    ## HAPPY PATH 1: Listing all songs in the table           ##
+    ############################################################
     def test1(self):
-        remove_song_name = "Blinding Lights"
-        remove_artist = "The Weeknd"
-        hdrs = {"Content-Type" : "application/json"}
-        js = {"name" : remove_song_name, "artist" : remove_artist}
-        rsp = requests.delete(REMOVE_URL, headers=hdrs, json=js)
-
-        self.assertEqual(rsp.status_code, 204)
+        rsp = requests.get(LISTALL_URL)
+        self.assertEqual(rsp.status_code, 200)
 
 
-    ###################################################################
-    ## HAPPY PATH 2: Removing a song with an apostrophe in the name. ##
-    ###################################################################
+    ############################################################
+    ## HAPPY PATH 2: Listing a limited number of songs        ##
+    ############################################################
     def test2(self):
-        remove_song_name = "Don't Look Back In Anger"
-        remove_artist = "Oasis"
-        hdrs = {"Content-Type" : "application/json"}
-        js = {"name" : remove_song_name, "artist" : remove_artist}
-        rsp = requests.delete(REMOVE_URL, headers=hdrs, json=js)
-
-        self.assertEqual(rsp.status_code, 204)
+        rsp = requests.get(LISTALL_URL + "?num_of_songs=2")
+        self.assertEqual(rsp.status_code, 200)
+        self.assertEqual(len(rsp.json()["songs"]), 2)
 
 
-    ############################################################################
-    ## UNHAPPY PATH 1: Removing a song that doesn't exist on the songs table. ##
-    ############################################################################
+    ############################################################
+    ## HAPPY PATH 3: Listing zero songs from the table        ##
+    ############################################################
     def test3(self):
-        remove_song_name = "good 4 u"
-        remove_artist = "Olivia Rodrigo"
-        hdrs = {"Content-Type" : "application/json"}
-        js = {"name" : remove_song_name, "artist" : remove_artist}
+        rsp = requests.get(LISTALL_URL + "?num_of_songs=0")
+        self.assertEqual(rsp.status_code, 200)
+        self.assertEqual(len(rsp.json()["songs"]), 0)
 
-        rsp = requests.delete(REMOVE_URL, headers=hdrs, json=js)
-
-        self.assertEqual(rsp.status_code, 404)
-        self.assertEqual(rsp.json(), {"error": "Song not found in table"})
-
-
-    ###################################################################
-    ## UNHAPPY PATH 2: Removing a song with no content in request.   ##
-    ###################################################################
+    ############################################################
+    ## UNHAPPY PATH 1: Invalid limit value                    ##
+    ############################################################
     def test4(self):
-        hdrs = {"Content-Type" : "application/json"}
-        js = {}
-        rsp = requests.delete(REMOVE_URL, headers=hdrs, json=js)
-
+        rsp = requests.get(LISTALL_URL + "?num_of_songs=abc")
         self.assertEqual(rsp.status_code, 400)
-        self.assertEqual(rsp.json(), {"error": "One or more fields are missing"})
+        self.assertEqual(rsp.json(), {"error": "Invalid limit value"})
+    
+
+    ############################################################
+    ## UNHAPPY PATH 2: Invalid limit value (negative number)  ##
+    ############################################################
+    def test5(self):
+        rsp = requests.get(LISTALL_URL + "?num_of_songs=-1")
+        self.assertEqual(rsp.status_code, 400)
+        self.assertEqual(rsp.json(), {"error": "Invalid limit value"})
 
     def tearDown(self):
         con = sqlite3.connect("../songs.db")
@@ -91,3 +87,32 @@ class Testing(unittest.TestCase):
         con.commit()
         con.close()
 
+
+
+class Testing1(unittest.TestCase):
+    def setUp(self):
+        con = sqlite3.connect("../songs.db")
+        cur = con.cursor()
+
+        con.execute("DROP TABLE IF EXISTS songs")
+        con.commit()
+
+        cur.execute("CREATE TABLE songs (name TEXT, artist TEXT, file TEXT, PRIMARY KEY (name, artist))")
+        con.close()
+
+
+    #######################################################################
+    ## HAPPY PATH 4: Listing songs when there are no songs in the table. ##
+    #######################################################################
+    def test1(self):
+        rsp = requests.get(LISTALL_URL)
+    
+        self.assertEqual(rsp.status_code, 200)
+        self.assertEqual(rsp.json(), {"songs":[]})
+
+    def tearDown(self):
+        con = sqlite3.connect("../songs.db")
+        cur = con.cursor()
+        con.execute("DROP TABLE IF EXISTS songs")
+        con.commit()
+        con.close()

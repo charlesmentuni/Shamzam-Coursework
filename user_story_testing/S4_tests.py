@@ -1,14 +1,15 @@
-import unittest.async_case
 import requests
 import base64
 import sqlite3
 import unittest
 
 
-LISTALL_URL = "http://localhost:3003/admin/list"
+CONVERT_URL = "http://localhost:3002/user/convert"
+
 
 class Testing(unittest.TestCase):
     def setUp(self):
+
         con = sqlite3.connect("../songs.db")
         cur = con.cursor()
 
@@ -16,69 +17,100 @@ class Testing(unittest.TestCase):
         con.commit()
 
         cur.execute("CREATE TABLE songs (name TEXT, artist TEXT, file TEXT, PRIMARY KEY (name, artist))")
-
-        f1 = open("../full_songs/Blinding Lights.wav", 'rb')
-        f2 = open("../full_songs/Everybody (Backstreets Back) (Radio Edit).wav", 'rb')
-        f3 = open("../full_songs/good 4 u.wav", 'rb')
 
         query = "INSERT INTO songs VALUES (?, ?, ?)"
-        file = base64.b64encode(f1.read()).decode('utf-8')
+
+        with open("../full_songs/Blinding Lights.wav", 'rb') as f:
+            file = base64.b64encode(f.read()).decode('utf-8')
+
         cur.execute(query, ("Blinding Lights", "The Weeknd", file))
 
-        file = base64.b64encode(f2.read()).decode('utf-8')
-        cur.execute(query, ("Everybody (Backstreets Back) (Radio Edit)", "Backstreet Boys", file))
-
-        file = base64.b64encode(f3.read()).decode('utf-8')
-        cur.execute(query, ("good 4 u", "Olivia Rodrigo", file))
-
-        f1.close()
-        f2.close()
-        f3.close()
+        with open("../full_songs/Everybody (Backstreets Back) (Radio Edit).wav", 'rb') as f:
+            file = base64.b64encode(f.read()).decode('utf-8')
+        
+        cur.execute(query, ("Everybody (Backstreet's Back) (Radio Edit)", "Backstreet Boys", file))
 
         con.commit()
-        con.close()
+        con.close() 
 
-    ############################################################
-    ## HAPPY PATH 1: Listing all songs in the table           ##
-    ############################################################
+    ###################################################################################################
+    ## HAPPY PATH 1: Recognise Blinding Lights from a fragment and return name, artist and full song ##
+    ###################################################################################################
     def test1(self):
-        rsp = requests.get(LISTALL_URL)
+        with open("../fragments/_Blinding Lights.wav", 'rb') as f:
+            cropped_file = base64.b64encode(f.read()).decode('utf-8')
+
+        hdrs = {"Content-Type" : "application/json"}
+        js   =  {"audio" : cropped_file }
+
+        rsp  = requests.post(CONVERT_URL, headers=hdrs, json=js)
+
         self.assertEqual(rsp.status_code, 200)
+        self.assertEqual(rsp.json().get("name"), "Blinding Lights")
+        self.assertEqual(rsp.json().get("artist"), "The Weeknd")
+        self.assertTrue("file" in rsp.json().keys())
+    
 
-
-    ############################################################
-    ## HAPPY PATH 2: Listing a limited number of songs        ##
-    ############################################################
+    ############################################################################
+    ## HAPPY PATH 2: Recognise Everybody (Backstreet's Back) from a fragment. ##
+    ############################################################################
     def test2(self):
-        rsp = requests.get(LISTALL_URL + "?num_of_songs=2")
+        # The name returned from AUDD API may not neccessarily be the name listed in the songs table
+        # Also the song name has an apostrophe in it, which may cause issues when selecting
+
+        with open("../fragments/_Everybody (Backstreets Back) (Radio Edit).wav", 'rb') as f:
+            cropped_file = base64.b64encode(f.read()).decode('utf-8')
+        
+        hdrs = {"Content-Type" : "application/json"}
+        js   =  {"audio" : cropped_file }
+
+        rsp  = requests.post(CONVERT_URL, headers=hdrs, json=js)
+
         self.assertEqual(rsp.status_code, 200)
-        self.assertEqual(len(rsp.json()["songs"]), 2)
+        self.assertEqual(rsp.json().get("name"), "Everybody (Backstreet's Back) (Radio Edit)")
+        self.assertEqual(rsp.json().get("artist"), "Backstreet Boys")
+        self.assertTrue("file" in rsp.json().keys())
 
 
-    ############################################################
-    ## HAPPY PATH 3: Listing zero songs from the table        ##
-    ############################################################
+    ###########################################################
+    ## UNHAPPY PATH 1: Fragment not recognised by Audd API   ##
+    ###########################################################
     def test3(self):
-        rsp = requests.get(LISTALL_URL + "?num_of_songs=0")
-        self.assertEqual(rsp.status_code, 200)
-        self.assertEqual(len(rsp.json()["songs"]), 0)
+        with open("../fragments/_Davos.wav", 'rb') as f:
+            davos_fragment = base64.b64encode(f.read()).decode('utf-8')
+        
+        hdrs = {"Content-Type" : "application/json"}
+        js   =  {"audio" : davos_fragment }
+        rsp  = requests.post(CONVERT_URL, headers=hdrs, json=js)
 
-    ############################################################
-    ## UNHAPPY PATH 1: Invalid limit value                    ##
-    ############################################################
+        self.assertEqual(rsp.status_code, 404)
+        self.assertEqual(rsp.json(), {"error": "Fragment not recognised"})
+    
+    #################################################################################
+    ## UNHAPPY PATH 2: Fragment recognised by Audd API but not in the songs table. ##
+    ################################################################################
     def test4(self):
-        rsp = requests.get(LISTALL_URL + "?num_of_songs=abc")
-        self.assertEqual(rsp.status_code, 400)
-        self.assertEqual(rsp.json(), {"error": "Invalid limit value"})
-    
+        with open("../fragments/_good 4 u.wav", 'rb') as f:
+            cropped_file = base64.b64encode(f.read()).decode('utf-8')
 
-    ############################################################
-    ## UNHAPPY PATH 2: Invalid limit value (negative number)  ##
-    ############################################################
+        hdrs = {"Content-Type" : "application/json"}
+        js   =  {"audio" : cropped_file }
+        rsp  = requests.post(CONVERT_URL, headers=hdrs, json=js)
+
+        self.assertEqual(rsp.status_code, 404)
+        self.assertEqual(rsp.json(), {"error": "Fragment recognised but not in the songs table"})
+
+
+    ###########################################################
+    ## UNHAPPY PATH 3: File is not sent in the request.       ##
+    ###########################################################
     def test5(self):
-        rsp = requests.get(LISTALL_URL + "?num_of_songs=-1")
+        hdrs = {"Content-Type" : "application/json"}
+        js   =  {}
+        rsp  = requests.post(CONVERT_URL, headers=hdrs, json=js)
         self.assertEqual(rsp.status_code, 400)
-        self.assertEqual(rsp.json(), {"error": "Invalid limit value"})
+        self.assertEqual(rsp.json(), {"error": "No audio file provided, or bad syntax"})
+
 
     def tearDown(self):
         con = sqlite3.connect("../songs.db")
@@ -88,31 +120,3 @@ class Testing(unittest.TestCase):
         con.close()
 
 
-
-class Testing1(unittest.TestCase):
-    def setUp(self):
-        con = sqlite3.connect("../songs.db")
-        cur = con.cursor()
-
-        con.execute("DROP TABLE IF EXISTS songs")
-        con.commit()
-
-        cur.execute("CREATE TABLE songs (name TEXT, artist TEXT, file TEXT, PRIMARY KEY (name, artist))")
-        con.close()
-
-
-    #######################################################################
-    ## HAPPY PATH 4: Listing songs when there are no songs in the table. ##
-    #######################################################################
-    def test1(self):
-        rsp = requests.get(LISTALL_URL)
-    
-        self.assertEqual(rsp.status_code, 200)
-        self.assertEqual(rsp.json(), {"songs":[]})
-
-    def tearDown(self):
-        con = sqlite3.connect("../songs.db")
-        cur = con.cursor()
-        con.execute("DROP TABLE IF EXISTS songs")
-        con.commit()
-        con.close()
